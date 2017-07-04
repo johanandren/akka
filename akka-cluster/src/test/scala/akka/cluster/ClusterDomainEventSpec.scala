@@ -79,6 +79,21 @@ class ClusterDomainEventSpec extends WordSpec with Matchers {
       diffSeen(ClusterSettings.DefaultTeam, g1, g2, selfDummyAddress) should ===(Seq.empty)
     }
 
+    "be produced for teams in unreachable" in {
+      val dc2MemberUp = TestMember(Address("akka.tcp", "sys", "otm", 2552), Up, Set.empty, "dc2")
+      val dc2TeamMemberDown = TestMember(Address("akka.tcp", "sys", "otm", 2552), Down, Set.empty, "dc2")
+
+      val reachability1 = Reachability.empty
+      val g1 = Gossip(members = SortedSet(aUp, dc2MemberUp), overview = GossipOverview(reachability = reachability1))
+
+      val reachability2 = reachability1
+        .unreachable(aUp.uniqueAddress, dc2TeamMemberDown.uniqueAddress)
+      val g2 = Gossip(members = SortedSet(aUp, dc2TeamMemberDown), overview = GossipOverview(reachability = reachability2))
+
+      diffUnreachableTeam(g1, g2, selfDummyAddress) should ===(Seq(UnreachableTeam("dc2", Set(dc2TeamMemberDown))))
+      diffUnreachable(g1, g2, dc2TeamMemberDown.uniqueAddress) should ===(Seq())
+    }
+
     "be produced for members becoming reachable after unreachable" in {
       val reachability1 = Reachability.empty.
         unreachable(aUp.uniqueAddress, cUp.uniqueAddress).reachable(aUp.uniqueAddress, cUp.uniqueAddress).

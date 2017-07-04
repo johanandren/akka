@@ -244,6 +244,11 @@ object ClusterEvent {
   final case class ReachableMember(member: Member) extends ReachabilityEvent
 
   /**
+   * A team is considered as unreachable when any members from the team are unreachable
+   */
+  final case class UnreachableTeam(team: Team, members: Set[Member]) extends ClusterDomainEvent
+
+  /**
    * INTERNAL API
    * The nodes that have seen current version of the Gossip.
    */
@@ -273,6 +278,16 @@ object ClusterEvent {
           UnreachableMember(newGossip.member(node))
       })(collection.breakOut)
     }
+
+  /**
+   * INTERNAL API
+   */
+  private[cluster] def diffUnreachableTeam(oldGossip: Gossip, newGossip: Gossip, selfUniqueAddress: UniqueAddress): immutable.Seq[UnreachableTeam] = {
+    diffUnreachable(oldGossip, newGossip, selfUniqueAddress)
+      .filter(_.member.team != newGossip.member(selfUniqueAddress).team)
+      .groupBy(_.member.team)
+      .map { case (team, members) ⇒ UnreachableTeam(team, members.map(_.member).toSet) }(collection.breakOut)
+  }
 
   /**
    * INTERNAL API
