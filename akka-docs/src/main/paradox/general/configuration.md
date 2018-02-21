@@ -118,6 +118,47 @@ The plugin configuration might look like this:
 </plugin>
 ```
 
+@@@
+
+If you are using Gradle to package your application, you can also make use of
+the [Shadow Plugin](http://imperceptiblethoughts.com/shadow/) support for [Resource
+Transformers](http://imperceptiblethoughts.com/shadow/#appending_text_files)
+to merge all the reference.confs on the build classpath into one. 
+
+The plugin configuration might look like this:
+
+```
+buildscript {
+    repositories {
+        mavenCentral()
+        jcenter()
+    }
+    dependencies {
+        // For build Jar file: http://imperceptiblethoughts.com/shadow/
+        classpath "com.github.jengelman.gradle.plugins:shadow:2.0.2"
+    }
+}
+
+group 'akka-gradle-fatjar-example'
+version '1.0.0'
+
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // akka dependency or packages which contains akka package.
+}
+
+shadowJar {
+    append('resource.conf')
+}
+```
+
+
 ## Custom application.conf
 
 A custom `application.conf` might look like this:
