@@ -656,14 +656,14 @@ abstract class Logger private[akka] () {
   /**
    * Scala API: the returned logger will add the given MDC (Mapped Diagnostic Context) to any log entry logged
    *
-   * See also [[akka.actor.typed.scaladsl.Behaviors.withMdc]]
+   * See also [[akka.actor.typed.scaladsl.Behaviors.withMdc[T](staticMdc:Map[String,Any],mdcForMessage*]]]
    */
   def withMdc(mdc: Map[String, Any]): Logger
 
   /**
    * Java API: the returned logger will add the given MDC (Mapped Diagnostic Context) to any log entry logged
    *
-   * See also [[akka.actor.typed.javadsl.Behaviors.withMdc]]
+   * See also [[akka.actor.typed.javadsl.Behaviors.withMdc[T](staticMdc:java\.util\.Map[String,Any],mdcForMessage*]]
    */
   def withMdc(mdc: java.util.Map[String, Any]): Logger
 }

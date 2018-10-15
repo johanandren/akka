@@ -169,7 +169,7 @@ object ActorSystem {
 
   /**
    * Scala API: Creates a new actor system with the specified name and settings
-   * The core actor system settings are defined in [[BootstrapSetup]]
+   * The core actor system settings are defined in [[akka.actor.BootstrapSetup$]]
    */
   def apply[T](guardianBehavior: Behavior[T], name: String, setup: ActorSystemSetup, guardianProps: Props = Props.empty): ActorSystem[T] = {
     createInternal(name, guardianBehavior, guardianProps, setup)
@@ -196,7 +196,7 @@ object ActorSystem {
 
   /**
    * Java API: Creates a new actor system with the specified name and settings
-   * The core actor system settings are defined in [[BootstrapSetup]]
+   * The core actor system settings are defined in [[akka.actor.BootstrapSetup$]]
    */
   def create[T](guardianBehavior: Behavior[T], name: String, setups: ActorSystemSetup): ActorSystem[T] =
     apply(guardianBehavior, name, setups)
