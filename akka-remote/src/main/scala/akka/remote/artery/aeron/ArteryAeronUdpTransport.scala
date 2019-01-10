@@ -53,7 +53,6 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
   import AeronSource.AeronLifecycle
   import ArteryTransport._
   import Decoder.InboundCompressionAccess
-  import FlightRecorderEvents._
 
   override type LifeCycle = AeronLifecycle
 
@@ -72,12 +71,12 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
     startMediaDriver()
     startAeron()
     startAeronErrorLog()
-    topLevelFlightRecorder.loFreq(Transport_AeronErrorLogStarted, NoMetaData)
+    new TransportAeronErrorLogStarted().commit()
     if (settings.LogAeronCounters) {
       startAeronCounterLog()
     }
     taskRunner.start()
-    topLevelFlightRecorder.loFreq(Transport_TaskRunnerStarted, NoMetaData)
+    new TransportTaskRunnerStarted().commit()
   }
 
   private def startMediaDriver(): Unit = {
@@ -119,7 +118,7 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
 
       val driver = MediaDriver.launchEmbedded(driverContext)
       log.info("Started embedded media driver in directory [{}]", driver.aeronDirectoryName)
-      topLevelFlightRecorder.loFreq(Transport_MediaDriverStarted, driver.aeronDirectoryName())
+      new TransportMediaDriverStarted(driver.aeronDirectoryName()).commit()
       if (!mediaDriver.compareAndSet(None, Some(driver))) {
         throw new IllegalStateException("media driver started more than once")
       }
@@ -145,7 +144,7 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
       try {
         if (settings.Advanced.DeleteAeronDirectory) {
           IoUtil.delete(new File(driver.aeronDirectoryName), false)
-          topLevelFlightRecorder.loFreq(Transport_MediaFileDeleted, NoMetaData)
+          new TransportMediaFileDeleted().commit()
         }
       } catch {
         case NonFatal(e) ⇒
@@ -283,12 +282,11 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
     // If we want to stop for Aeron also it is probably easier to stop the publication inside the
     // AeronSink, i.e. not using a KillSwitch.
     Sink.fromGraph(new AeronSink(outboundChannel(outboundContext.remoteAddress), streamId, aeron, taskRunner,
-      bufferPool, giveUpAfter, createFlightRecorderEventSink()))
+      bufferPool, giveUpAfter))
   }
 
   private def aeronSource(streamId: Int, pool: EnvelopeBufferPool): Source[EnvelopeBuffer, AeronSource.AeronLifecycle] =
-    Source.fromGraph(new AeronSource(inboundChannel, streamId, aeron, taskRunner, pool,
-      createFlightRecorderEventSink(), aeronSourceSpinningStrategy))
+    Source.fromGraph(new AeronSource(inboundChannel, streamId, aeron, taskRunner, pool, aeronSourceSpinningStrategy))
 
   private def aeronSourceSpinningStrategy: Int =
     if (settings.Advanced.InboundLanes > 1 || // spinning was identified to be the cause of massive slowdowns with multiple lanes, see #21365
@@ -388,10 +386,10 @@ private[remote] class ArteryAeronUdpTransport(_system: ExtendedActorSystem, _pro
   override protected def shutdownTransport(): Future[Done] = {
     import system.dispatcher
     taskRunner.stop().map { _ ⇒
-      topLevelFlightRecorder.loFreq(Transport_Stopped, NoMetaData)
+      new TransportStopped().commit()
       if (aeronErrorLogTask != null) {
         aeronErrorLogTask.cancel()
-        topLevelFlightRecorder.loFreq(Transport_AeronErrorLogTaskStopped, NoMetaData)
+        new TransportAeronErrorLogTaskStopped().commit()
       }
       if (aeron != null) aeron.close()
       if (aeronErrorLog != null) aeronErrorLog.close()

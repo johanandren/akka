@@ -80,17 +80,15 @@ private[remote] object AeronSink {
  * @param channel eg. "aeron:udp?endpoint=localhost:40123"
  */
 private[remote] class AeronSink(
-  channel:        String,
-  streamId:       Int,
-  aeron:          Aeron,
-  taskRunner:     TaskRunner,
-  pool:           EnvelopeBufferPool,
-  giveUpAfter:    Duration,
-  flightRecorder: EventSink)
+  channel:     String,
+  streamId:    Int,
+  aeron:       Aeron,
+  taskRunner:  TaskRunner,
+  pool:        EnvelopeBufferPool,
+  giveUpAfter: Duration)
   extends GraphStageWithMaterializedValue[SinkShape[EnvelopeBuffer], Future[Done]] {
   import AeronSink._
   import TaskRunner._
-  import FlightRecorderEvents._
 
   val in: Inlet[EnvelopeBuffer] = Inlet("AeronSink")
   override val shape: SinkShape[EnvelopeBuffer] = SinkShape(in)
@@ -116,23 +114,21 @@ private[remote] class AeronSink(
       private var delegateTaskStartTime = 0L
       private var countBeforeDelegate = 0L
 
-      private val channelMetadata = channel.getBytes("US-ASCII")
-
       override def preStart(): Unit = {
         setKeepGoing(true)
         pull(in)
         // TODO: Identify different sinks!
-        flightRecorder.loFreq(AeronSink_Started, channelMetadata)
+        new AeronSinkStarted(channel).commit()
       }
 
       override def postStop(): Unit = {
         try {
           taskRunner.command(Remove(addOfferTask.task))
-          flightRecorder.loFreq(AeronSink_TaskRunnerRemoved, channelMetadata)
+          new AeronSinkTaskRunnerRemoved(channel).commit()
           pub.close()
-          flightRecorder.loFreq(AeronSink_PublicationClosed, channelMetadata)
+          new AeronSinkPublicationClosed(channel).commit()
         } finally {
-          flightRecorder.loFreq(AeronSink_Stopped, channelMetadata)
+          new AeronSinkStopped(channel).commit()
           completed.complete(completedValue)
         }
       }
@@ -142,7 +138,7 @@ private[remote] class AeronSink(
         envelopeInFlight = grab(in)
         backoffCount = spinning
         lastMsgSize = envelopeInFlight.byteBuffer.limit
-        flightRecorder.hiFreq(AeronSink_EnvelopeGrabbed, lastMsgSize)
+        new AeronSinkEnvelopeGrabbed(lastMsgSize).commit()
         publish()
       }
 
@@ -175,17 +171,17 @@ private[remote] class AeronSink(
         offerTask.msgSize = lastMsgSize
         delegateTaskStartTime = System.nanoTime()
         taskRunner.command(addOfferTask)
-        flightRecorder.hiFreq(AeronSink_DelegateToTaskRunner, countBeforeDelegate)
+        new AeronSinkDelegateToTaskRunner(countBeforeDelegate).commit()
       }
 
       private def taskOnOfferSuccess(): Unit = {
         countBeforeDelegate = 0
-        flightRecorder.hiFreq(AeronSink_ReturnFromTaskRunner, System.nanoTime() - delegateTaskStartTime)
+        new AeronSinkReturnFromTaskRunner(System.nanoTime() - delegateTaskStartTime)
         onOfferSuccess()
       }
 
       private def onOfferSuccess(): Unit = {
-        flightRecorder.hiFreq(AeronSink_EnvelopeOffered, lastMsgSize)
+        new AeronSinkEnvelopeOffered(lastMsgSize).commit()
         offerTaskInProgress = false
         pool.release(envelopeInFlight)
         offerTask.buffer = null
@@ -200,7 +196,7 @@ private[remote] class AeronSink(
       private def onGiveUp(): Unit = {
         offerTaskInProgress = false
         val cause = new GaveUpMessageException(s"Gave up sending message to $channel after ${giveUpAfter.pretty}.")
-        flightRecorder.alert(AeronSink_GaveUpEnvelope, cause.toString.getBytes("US-ASCII"))
+        new AeronSinkGaveUpEnvelope(cause.toString).commit()
         completedValue = Failure(cause)
         failStage(cause)
       }
@@ -209,7 +205,7 @@ private[remote] class AeronSink(
         offerTaskInProgress = false
         val cause = new PublicationClosedException(s"Aeron Publication to [${channel}] was closed.")
         // this is not exepected, since we didn't close the publication ourselves
-        flightRecorder.alert(AeronSink_PublicationClosed, channelMetadata)
+        new AeronSinkUnexpectedPublicationClosed(channel).commit()
         completedValue = Failure(cause)
         failStage(cause)
       }

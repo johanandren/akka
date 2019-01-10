@@ -14,6 +14,8 @@ class TaskRunnerMetrics(system: ActorSystem) {
 
   private var entryOffset = 0
 
+  // fixme, how could we recreate this?
+  /*
   def printHistograms(): Unit = {
     val aeronSourceHistogram = new Histogram(SECONDS.toNanos(10), 3)
     val aeronSinkHistogram = new Histogram(SECONDS.toNanos(10), 3)
@@ -57,5 +59,5 @@ class TaskRunnerMetrics(system: ActorSystem) {
       case _ ⇒
     }
   }
-
+ */
 }

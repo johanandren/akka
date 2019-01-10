@@ -300,7 +300,6 @@ private[remote] class FlushOnShutdown(
 private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _provider: RemoteActorRefProvider)
   extends RemoteTransport(_system, _provider) with InboundContext {
   import ArteryTransport._
-  import FlightRecorderEvents._
 
   type LifeCycle
 
@@ -315,11 +314,6 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
 
   override val log: LoggingAdapter = Logging(system, getClass.getName)
 
-  val (afrFileChannel, afrFile, flightRecorder) = initializeFlightRecorder() match {
-    case None            ⇒ (None, None, None)
-    case Some((c, f, r)) ⇒ (Some(c), Some(f), Some(r))
-  }
-
   /**
    * Compression tables must be created once, such that inbound lane restarts don't cause dropping of the tables.
    * However are the InboundCompressions are owned by the Decoder operator, and any call into them must be looped through the Decoder!
@@ -328,8 +322,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
    */
   protected val _inboundCompressions = {
     if (settings.Advanced.Compression.Enabled) {
-      val eventSink = createFlightRecorderEventSink(synchr = false)
-      new InboundCompressionsImpl(system, this, settings.Advanced.Compression, eventSink)
+      new InboundCompressionsImpl(system, this, settings.Advanced.Compression)
     } else NoInboundCompressions
   }
 
@@ -383,23 +376,6 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
   private val outboundEnvelopePool = ReusableOutboundEnvelope.createObjectPool(capacity =
     settings.Advanced.OutboundMessageQueueSize * settings.Advanced.OutboundLanes * 3)
 
-  /**
-   * Thread-safe flight recorder for top level events.
-   */
-  val topLevelFlightRecorder: EventSink =
-    createFlightRecorderEventSink(synchr = true)
-
-  def createFlightRecorderEventSink(synchr: Boolean = false): EventSink = {
-    flightRecorder match {
-      case Some(f) ⇒
-        val eventSink = f.createEventSink()
-        if (synchr) new SynchronizedEventSink(eventSink)
-        else eventSink
-      case None ⇒
-        IgnoreEventSink
-    }
-  }
-
   private val associationRegistry = new AssociationRegistry(
     remoteAddress ⇒ new Association(
       this,
@@ -420,7 +396,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
       Runtime.getRuntime.addShutdownHook(shutdownHook)
 
     startTransport()
-    topLevelFlightRecorder.loFreq(Transport_Started, NoMetaData)
+    new TransportStarted().commit()
 
     val udp = settings.Transport == ArterySettings.AeronUpd
     val port =
@@ -443,8 +419,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
       Address(ArteryTransport.ProtocolName, system.name, settings.Bind.Hostname, bindPort),
       AddressUidExtension(system).longAddressUid)
 
-    // TODO: This probably needs to be a global value instead of an event as events might rotate out of the log
-    topLevelFlightRecorder.loFreq(Transport_UniqueAddressSet, _localAddress.toString())
+    new TransportUniqueAddressSet(localAddress).commit()
 
     materializer = ActorMaterializer.systemMaterializer(settings.Advanced.MaterializerSettings, "remote", system)
     controlMaterializer = ActorMaterializer.systemMaterializer(
@@ -452,10 +427,10 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
       "remoteControl", system)
 
     messageDispatcher = new MessageDispatcher(system, provider)
-    topLevelFlightRecorder.loFreq(Transport_MaterializerStarted, NoMetaData)
+    new TransportMaterializerStarted().commit()
 
     runInboundStreams()
-    topLevelFlightRecorder.loFreq(Transport_StartupFinished, NoMetaData)
+    new TransportStartupFinished().commit()
 
     startRemoveQuarantinedAssociationTask()
 
@@ -605,7 +580,7 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
       case cause ⇒
         if (restartCounter.restart()) {
           log.error(cause, "{} failed. Restarting it. {}", streamName, cause.getMessage)
-          topLevelFlightRecorder.loFreq(Transport_RestartInbound, s"$localAddress - $streamName")
+          new TransportRestartInbound(localAddress, streamName).commit()
           restart()
         } else {
           log.error(cause, "{} failed and restarted {} times within {} seconds. Terminating system. {}",
@@ -640,18 +615,13 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
     import system.dispatcher
 
     killSwitch.abort(ShutdownSignal)
-    topLevelFlightRecorder.loFreq(Transport_KillSwitchPulled, NoMetaData)
+    new TransportKillSwitchPulled().commit()
     for {
       _ ← streamsCompleted.recover { case _ ⇒ Done }
       _ ← shutdownTransport().recover { case _ ⇒ Done }
     } yield {
       // no need to explicitly shut down the contained access since it's lifecycle is bound to the Decoder
       _inboundCompressionAccess = OptionVal.None
-
-      topLevelFlightRecorder.loFreq(Transport_FlightRecorderClose, NoMetaData)
-      flightRecorder.foreach(_.close())
-      afrFileChannel.foreach(_.force(true))
-      afrFileChannel.foreach(_.close())
       Done
     }
   }
@@ -869,17 +839,6 @@ private[remote] abstract class ArteryTransport(_system: ExtendedActorSystem, _pr
       .viaMat(new InboundControlJunction)(Keep.right)
       .via(new SystemMessageAcker(this))
       .toMat(messageDispatcherSink)(Keep.both)
-  }
-
-  private def initializeFlightRecorder(): Option[(FileChannel, Path, FlightRecorder)] = {
-    if (settings.Advanced.FlightRecorderEnabled) {
-      val afrFile = FlightRecorder.createFlightRecorderFile(settings.Advanced.FlightRecorderDestination)
-      log.info("Flight recorder enabled, output can be found in '{}'", afrFile)
-
-      val fileChannel = FlightRecorder.prepareFileForFlightRecorder(afrFile)
-      Some((fileChannel, afrFile, new FlightRecorder(fileChannel)))
-    } else
-      None
   }
 
   def outboundTestFlow(outboundContext: OutboundContext): Flow[OutboundEnvelope, OutboundEnvelope, NotUsed] =

@@ -7,7 +7,7 @@ package akka.remote
 import java.util.UUID
 
 import akka.remote.artery.ArterySpecSupport
-import akka.remote.testkit.{ FlightRecordingSupport, MultiNodeConfig, MultiNodeSpec, STMultiNodeSpec }
+import akka.remote.testkit.{ MultiNodeConfig, MultiNodeSpec, STMultiNodeSpec }
 import akka.testkit.{ DefaultTimeout, ImplicitSender }
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{ Outcome, Suite }
@@ -30,7 +30,6 @@ object RemotingMultiNodeSpec {
 abstract class RemotingMultiNodeSpec(config: MultiNodeConfig) extends MultiNodeSpec(config)
   with Suite
   with STMultiNodeSpec
-  with FlightRecordingSupport
   with ImplicitSender
   with DefaultTimeout { self: MultiNodeSpec ⇒
 
@@ -44,9 +43,9 @@ abstract class RemotingMultiNodeSpec(config: MultiNodeConfig) extends MultiNodeS
   }
 
   override def afterTermination(): Unit = {
-    if (failed || sys.props.get("akka.remote.artery.always-dump-flight-recorder").isDefined) {
+    // FIXME dump/point to JFR recording on failure
+    /* if (failed ) {
       printFlightRecording()
-    }
-    deleteFlightRecorderFile()
+    } */
   }
 }

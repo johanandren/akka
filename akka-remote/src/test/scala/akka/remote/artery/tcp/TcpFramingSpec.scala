@@ -25,9 +25,7 @@ class TcpFramingSpec extends AkkaSpec with ImplicitSender {
   private val matSettings = ActorMaterializerSettings(system).withFuzzing(true)
   private implicit val mat = ActorMaterializer(matSettings)(system)
 
-  private val afr = IgnoreEventSink
-
-  private val framingFlow = Flow[ByteString].via(new TcpFraming(afr))
+  private val framingFlow = Flow[ByteString].via(new TcpFraming)
 
   private val payload5 = ByteString((1 to 5).map(_.toByte).toArray)
 

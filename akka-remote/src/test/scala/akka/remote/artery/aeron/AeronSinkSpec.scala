@@ -60,7 +60,7 @@ class AeronSinkSpec extends AkkaSpec with ImplicitSender {
       val port = SocketUtil.temporaryLocalPort(udp = true)
       val channel = s"aeron:udp?endpoint=localhost:$port"
 
-      Source.fromGraph(new AeronSource(channel, 1, aeron, taskRunner, pool, IgnoreEventSink, 0))
+      Source.fromGraph(new AeronSource(channel, 1, aeron, taskRunner, pool, 0))
         // fail receiver stream on first message
         .map(_ ⇒ throw new RuntimeException("stop") with NoStackTrace)
         .runWith(Sink.ignore)
@@ -74,7 +74,7 @@ class AeronSinkSpec extends AkkaSpec with ImplicitSender {
           envelope.byteBuffer.flip()
           envelope
         }
-        .runWith(new AeronSink(channel, 1, aeron, taskRunner, pool, 500.millis, IgnoreEventSink))
+        .runWith(new AeronSink(channel, 1, aeron, taskRunner, pool, 500.millis))
 
       // without the give up timeout the stream would not complete/fail
       intercept[GaveUpMessageException] {

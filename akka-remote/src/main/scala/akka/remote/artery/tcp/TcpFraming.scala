@@ -9,7 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 import akka.annotation.InternalApi
-import akka.remote.artery.FlightRecorderEvents.TcpInbound_Received
+
 import akka.stream.Attributes
 import akka.stream.impl.io.ByteStringParser
 import akka.stream.impl.io.ByteStringParser.ByteReader
@@ -60,7 +60,7 @@ import akka.util.ByteString
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class TcpFraming(flightRecorder: EventSink) extends ByteStringParser[EnvelopeBuffer] {
+@InternalApi private[akka] class TcpFraming extends ByteStringParser[EnvelopeBuffer] {
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new ParsingLogic {
     abstract class Step extends ParseStep[EnvelopeBuffer]
     startWith(ReadMagic)
@@ -93,7 +93,7 @@ import akka.util.ByteString
       private def createBuffer(bs: ByteString): EnvelopeBuffer = {
         val buffer = ByteBuffer.wrap(bs.toArray)
         buffer.order(ByteOrder.LITTLE_ENDIAN)
-        flightRecorder.hiFreq(TcpInbound_Received, buffer.limit)
+        new TcpInboundReceived(buffer.limit).commit()
         val res = new EnvelopeBuffer(buffer)
         res.setStreamId(streamId)
         res

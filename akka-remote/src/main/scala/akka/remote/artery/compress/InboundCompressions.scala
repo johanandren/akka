@@ -54,8 +54,7 @@ private[remote] trait InboundCompressions {
 private[remote] final class InboundCompressionsImpl(
   system:         ActorSystem,
   inboundContext: InboundContext,
-  settings:       ArterySettings.Compression,
-  eventSink:      EventSink                  = IgnoreEventSink) extends InboundCompressions {
+  settings:       ArterySettings.Compression) extends InboundCompressions {
 
   private[this] val _actorRefsIns = new Long2ObjectHashMap[InboundActorRefCompression]()
   private[this] val _inboundActorRefsLog = Logging(system, classOf[InboundActorRefCompression])
@@ -104,7 +103,7 @@ private[remote] final class InboundCompressionsImpl(
       val inbound = vs.next()
       inboundContext.association(inbound.originUid) match {
         case OptionVal.Some(a) if !a.associationState.isQuarantined(inbound.originUid) ⇒
-          eventSink.hiFreq(FlightRecorderEvents.Compression_Inbound_RunActorRefAdvertisement, inbound.originUid)
+          new CompressionInboundRunActorRefAdvertisement(inbound.originUid).commit()
           inbound.runNextTableAdvertisement()
         case _ ⇒ remove :+= inbound.originUid
       }
@@ -135,7 +134,7 @@ private[remote] final class InboundCompressionsImpl(
       val inbound = vs.next()
       inboundContext.association(inbound.originUid) match {
         case OptionVal.Some(a) if !a.associationState.isQuarantined(inbound.originUid) ⇒
-          eventSink.hiFreq(FlightRecorderEvents.Compression_Inbound_RunClassManifestAdvertisement, inbound.originUid)
+          new CompressionInboundRunClassManifestAdvertisement(inbound.originUid).commit()
           inbound.runNextTableAdvertisement()
         case _ ⇒ remove :+= inbound.originUid
       }

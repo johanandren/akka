@@ -129,12 +129,10 @@ private[remote] class Association(
   outboundEnvelopePool:        ObjectPool[ReusableOutboundEnvelope])
   extends AbstractAssociation with OutboundContext {
   import Association._
-  import FlightRecorderEvents._
 
   require(remoteAddress.port.nonEmpty)
 
   private val log = Logging(transport.system, getClass.getName)
-  private def flightRecorder = transport.topLevelFlightRecorder
 
   override def settings = transport.settings
   private def advancedSettings = transport.settings.Advanced
@@ -337,7 +335,7 @@ private[remote] class Association(
           "Dropping message [{}] from [{}] to [{}] due to {}",
           Logging.messageClassName(message), sender.getOrElse(deadletters), recipient.getOrElse(recipient), reason)
       }
-      flightRecorder.hiFreq(Transport_SendQueueOverflow, queueIndex)
+      new TransportSendQueueOverflow(queueIndex).commit()
       deadletters ! env
     }
 
@@ -479,7 +477,7 @@ private[remote] class Association(
                     remoteAddress, u, reason)
                   transport.system.eventStream.publish(QuarantinedEvent(remoteAddress, u))
                 }
-                flightRecorder.loFreq(Transport_Quarantined, s"$remoteAddress - $u")
+                new TransportQuarantined(remoteAddress, u).commit()
                 clearOutboundCompression()
                 clearInboundCompression(u)
                 // end delivery of system messages to that incarnation after this point
@@ -513,7 +511,7 @@ private[remote] class Association(
    */
   def removedAfterQuarantined(): Unit = {
     if (!isRemovedAfterQuarantined()) {
-      flightRecorder.loFreq(Transport_RemovedQuarantined, remoteAddress.toString)
+      new TransportRemovedQuarantined(remoteAddress)
       queues(ControlQueueIndex) = RemovedQueueWrapper
 
       if (transport.largeMessageChannelEnabled)
@@ -592,7 +590,7 @@ private[remote] class Association(
                     case OptionVal.Some(k) ⇒
                       // for non-control streams we can stop the entire stream
                       log.info("Stopping idle outbound stream [{}] to [{}]", queueIndex, remoteAddress)
-                      flightRecorder.loFreq(Transport_StopIdleOutbound, s"$remoteAddress - $queueIndex")
+                      new TransportStopIdleOutbound(remoteAddress, queueIndex).commit()
                       setStopReason(queueIndex, OutboundStreamStopIdleSignal)
                       clearStreamKillSwitch(queueIndex, k)
                       k.abort(OutboundStreamStopIdleSignal)
@@ -605,7 +603,7 @@ private[remote] class Association(
                   associationState.controlIdleKillSwitch match {
                     case OptionVal.Some(killSwitch) ⇒
                       log.info("Stopping idle outbound control stream to [{}]", remoteAddress)
-                      flightRecorder.loFreq(Transport_StopIdleOutbound, s"$remoteAddress - $queueIndex")
+                      new TransportStopIdleOutbound(remoteAddress, queueIndex).commit()
                       setControlIdleKillSwitch(OptionVal.None)
                       killSwitch.abort(OutboundStreamStopIdleSignal)
                     case OptionVal.None ⇒ // already stopped
@@ -816,7 +814,7 @@ private[remote] class Association(
                                           streamCompleted: Future[Done], restart: () ⇒ Unit): Unit = {
 
     def lazyRestart(): Unit = {
-      flightRecorder.loFreq(Transport_RestartOutbound, s"$remoteAddress - $streamName")
+      new TransportRestartOutbound(remoteAddress, streamName).commit()
       outboundCompressionAccess = Vector.empty
       if (queueIndex == ControlQueueIndex) {
         materializing = new CountDownLatch(1)

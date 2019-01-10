@@ -76,18 +76,16 @@ private[remote] object AeronSource {
  *                 when waiting for data
  */
 private[remote] class AeronSource(
-  channel:        String,
-  streamId:       Int,
-  aeron:          Aeron,
-  taskRunner:     TaskRunner,
-  pool:           EnvelopeBufferPool,
-  flightRecorder: EventSink,
-  spinning:       Int)
+  channel:    String,
+  streamId:   Int,
+  aeron:      Aeron,
+  taskRunner: TaskRunner,
+  pool:       EnvelopeBufferPool,
+  spinning:   Int)
   extends GraphStageWithMaterializedValue[SourceShape[EnvelopeBuffer], AeronSource.AeronLifecycle] {
 
   import AeronSource._
   import TaskRunner._
-  import FlightRecorderEvents._
 
   val out: Outlet[EnvelopeBuffer] = Outlet("AeronSource")
   override val shape: SourceShape[EnvelopeBuffer] = SourceShape(out)
@@ -104,8 +102,6 @@ private[remote] class AeronSource(
       private val messageHandler = new MessageHandler(pool)
       private val addPollTask: Add = Add(pollTask(subscription, messageHandler, getAsyncCallback(taskOnMessage)))
 
-      private val channelMetadata = channel.getBytes("US-ASCII")
-
       private var delegatingToTaskRunner = false
 
       private var pendingUnavailableImages: List[Int] = Nil
@@ -120,7 +116,7 @@ private[remote] class AeronSource(
       override protected def logSource = classOf[AeronSource]
 
       override def preStart(): Unit = {
-        flightRecorder.loFreq(AeronSource_Started, channelMetadata)
+        new AeronSourceStarted(channel).commit()
       }
 
       override def postStop(): Unit = {
@@ -130,7 +126,7 @@ private[remote] class AeronSource(
             // media driver was shutdown
             log.debug("DriverTimeout when closing subscription. {}", e)
         } finally
-          flightRecorder.loFreq(AeronSource_Stopped, channelMetadata)
+          new AeronSourceStopped(channel).commit()
       }
 
       // OutHandler
@@ -157,7 +153,7 @@ private[remote] class AeronSource(
             subscriberLoop() // recursive
           } else {
             // delegate backoff to shared TaskRunner
-            flightRecorder.hiFreq(AeronSource_DelegateToTaskRunner, countBeforeDelegate)
+            new AeronSourceDelegateToTaskRunner(countBeforeDelegate).commit()
             delegatingToTaskRunner = true
             delegateTaskStartTime = System.nanoTime()
             taskRunner.command(addPollTask)
@@ -174,13 +170,13 @@ private[remote] class AeronSource(
       private def taskOnMessage(data: EnvelopeBuffer): Unit = {
         countBeforeDelegate = 0
         delegatingToTaskRunner = false
-        flightRecorder.hiFreq(AeronSource_ReturnFromTaskRunner, System.nanoTime() - delegateTaskStartTime)
+        new AeronSourceReturnFromTaskRunner(System.nanoTime() - delegateTaskStartTime).commit()
         freeSessionBuffers()
         onMessage(data)
       }
 
       private def onMessage(data: EnvelopeBuffer): Unit = {
-        flightRecorder.hiFreq(AeronSource_Received, data.byteBuffer.limit)
+        new AeronSourceReceived(data.byteBuffer.limit).commit()
         push(out, data)
       }
 

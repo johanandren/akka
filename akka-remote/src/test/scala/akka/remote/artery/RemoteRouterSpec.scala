@@ -36,7 +36,7 @@ class RemoteRouterSpec extends AkkaSpec(ConfigFactory.parseString("""
         router = round-robin-pool
         nr-of-instances = 6
       }
-    }""").withFallback(ArterySpecSupport.defaultConfig)) with FlightRecorderSpecIntegration {
+    }""").withFallback(ArterySpecSupport.defaultConfig)) {
 
   import RemoteRouterSpec._
 
@@ -77,15 +77,12 @@ class RemoteRouterSpec extends AkkaSpec(ConfigFactory.parseString("""
         }
       }
     }"""
-  ).withFallback(ArterySpecSupport.newFlightRecorderConfig)
-    .withFallback(system.settings.config)
+  ).withFallback(system.settings.config)
 
   val masterSystem = ActorSystem("Master" + sysName, conf)
 
   override def afterTermination(): Unit = {
     shutdown(masterSystem)
-    handleFlightRecorderFile(system)
-    handleFlightRecorderFile(masterSystem)
   }
 
   def collectRouteePaths(probe: TestProbe, router: ActorRef, n: Int): immutable.Seq[ActorPath] = {
