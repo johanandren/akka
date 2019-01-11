@@ -7,9 +7,9 @@ package akka.remote.testkit
 import java.nio.file.{ FileSystems, Files, Path }
 
 import akka.remote.RARP
-import akka.remote.artery.FlightRecorderReader
 
 /**
+ * FIXME some kind of replacement for this with JFR
  * Provides test framework agnostic methods to dump the artery flight recorder data after a test has completed - you
  * must integrate the logic with the testing tool you use yourself.
  *
@@ -47,8 +47,8 @@ trait FlightRecordingSupport { self: MultiNodeSpec ⇒
   final protected def printFlightRecording(): Unit = {
     if (arteryEnabled && destinationIsValidForDump() && Files.exists(flightRecorderFile)) {
       // use stdout/println as we do not know if the system log is alive
-      println(s"Flight recorder dump from '$flightRecorderFile':")
-      FlightRecorderReader.dumpToStdout(flightRecorderFile)
+      println(s"FIXME Flight recorder dump from '$flightRecorderFile':")
+      // FlightRecorderReader.dumpToStdout(flightRecorderFile)
     }
   }
 

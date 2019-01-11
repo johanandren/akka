@@ -106,8 +106,8 @@ abstract class AeronStreamConsistencySpec
     "start echo" in {
       runOn(second) {
         // just echo back
-        Source.fromGraph(new AeronSource(channel(second), streamId, aeron, taskRunner, pool, IgnoreEventSink, 0))
-          .runWith(new AeronSink(channel(first), streamId, aeron, taskRunner, pool, giveUpMessageAfter, IgnoreEventSink))
+        Source.fromGraph(new AeronSource(channel(second), streamId, aeron, taskRunner, pool, 0))
+          .runWith(new AeronSink(channel(first), streamId, aeron, taskRunner, pool, giveUpMessageAfter))
       }
       enterBarrier("echo-started")
     }
@@ -120,7 +120,7 @@ abstract class AeronStreamConsistencySpec
         val killSwitch = KillSwitches.shared("test")
         val started = TestProbe()
         val startMsg = "0".getBytes("utf-8")
-        Source.fromGraph(new AeronSource(channel(first), streamId, aeron, taskRunner, pool, IgnoreEventSink, 0))
+        Source.fromGraph(new AeronSource(channel(first), streamId, aeron, taskRunner, pool, 0))
           .via(killSwitch.flow)
           .runForeach { envelope ⇒
             val bytes = ByteString.fromByteBuffer(envelope.byteBuffer)
@@ -148,7 +148,7 @@ abstract class AeronStreamConsistencySpec
             envelope
           }
             .throttle(1, 200.milliseconds, 1, ThrottleMode.Shaping)
-            .runWith(new AeronSink(channel(second), streamId, aeron, taskRunner, pool, giveUpMessageAfter, IgnoreEventSink))
+            .runWith(new AeronSink(channel(second), streamId, aeron, taskRunner, pool, giveUpMessageAfter))
           started.expectMsg(Done)
         }
 
@@ -160,7 +160,7 @@ abstract class AeronStreamConsistencySpec
             envelope.byteBuffer.flip()
             envelope
           }
-          .runWith(new AeronSink(channel(second), streamId, aeron, taskRunner, pool, giveUpMessageAfter, IgnoreEventSink))
+          .runWith(new AeronSink(channel(second), streamId, aeron, taskRunner, pool, giveUpMessageAfter))
 
         Await.ready(done, 20.seconds)
         killSwitch.shutdown()

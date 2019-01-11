@@ -14,9 +14,9 @@ class TaskRunnerMetrics(system: ActorSystem) {
 
   private var entryOffset = 0
 
-  // fixme, how could we recreate this?
-  /*
   def printHistograms(): Unit = {
+    // FIXME how could we recreate this with JFR?
+    /*
     val aeronSourceHistogram = new Histogram(SECONDS.toNanos(10), 3)
     val aeronSinkHistogram = new Histogram(SECONDS.toNanos(10), 3)
     system.asInstanceOf[ExtendedActorSystem].provider.asInstanceOf[RemoteActorRefProvider].transport match {
@@ -58,6 +58,6 @@ class TaskRunnerMetrics(system: ActorSystem) {
         }
       case _ ⇒
     }
-  }
  */
+  }
 }

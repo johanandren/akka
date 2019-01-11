@@ -176,6 +176,7 @@ private[remote] class AeronSource(
       }
 
       private def onMessage(data: EnvelopeBuffer): Unit = {
+
         new AeronSourceReceived(data.byteBuffer.limit).commit()
         push(out, data)
       }

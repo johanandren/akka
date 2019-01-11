@@ -110,21 +110,25 @@ class AeronSinkPublicationClosed(val channel: String) extends Event
 class AeronSinkStopped(val channel: String) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Sink Envelope Grabbed")
 class AeronSinkEnvelopeGrabbed(val lastMessageSize: Int) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Sink Delegate to TaskRunner")
 class AeronSinkDelegateToTaskRunner(val counfBeforeDelegate: Long) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Sink Return from TaskRunner")
 class AeronSinkReturnFromTaskRunner(@Timespan(Timespan.MILLISECONDS) val timing: Long) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Sink Envelope Offered")
 class AeronSinkEnvelopeOffered(val lastMessageSize: Int) extends Event
@@ -150,16 +154,19 @@ class AeronSourceStarted(val channel: String) extends Event
 class AeronSourceStopped(val channel: String) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Source Delegate to TaskRunner")
 class AeronSourceDelegateToTaskRunner(val countBeforeDelegate: Long) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Source Return from TaskRunner")
 class AeronSourceReturnFromTaskRunner(val timing: Long) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("Aeron Source Received")
 class AeronSourceReceived(val size: Int) extends Event
@@ -205,11 +212,13 @@ class TcpOutboundConnected(remoteAddress: Address, val streamName: String) exten
 
 // lower level
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("TCP Inbound Received")
 class TcpInboundReceived(val size: Int) extends Event
 
 @StackTrace(false)
+@Enabled(false) // very high frequency, has to be enabled explicitly
 @Category(Array("Akka", "Remoting"))
 @Label("TCP Outbound Sent")
 class TcpOutboundSent(val size: Int) extends Event
