@@ -178,8 +178,6 @@ private[akka] final class ArterySettings private (config: Config) {
     require(ImageLivenessTimeout < HandshakeTimeout, "image-liveness-timeout must be less than handshake-timeout")
     val DriverTimeout: FiniteDuration = config.getMillisDuration("driver-timeout").requiring(interval ⇒
       interval > Duration.Zero, "driver-timeout must be more than zero")
-    val FlightRecorderEnabled: Boolean = getBoolean("flight-recorder.enabled")
-    val FlightRecorderDestination: String = getString("flight-recorder.destination")
     val Compression = new Compression(getConfig("compression"))
 
     final val MaximumFrameSize: Int = math.min(getBytes("maximum-frame-size"), Int.MaxValue).toInt
