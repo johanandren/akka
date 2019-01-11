@@ -4,57 +4,83 @@
 
 package akka.remote.testkit
 
-import java.nio.file.{ FileSystems, Files, Path }
+import java.nio.file.{ Files, Path }
+import java.util.UUID
 
-import akka.remote.RARP
+import jdk.jfr.Recording
+import jdk.jfr.consumer.RecordingFile
 
+import scala.collection.JavaConverters._
 /**
  * FIXME some kind of replacement for this with JFR
- * Provides test framework agnostic methods to dump the artery flight recorder data after a test has completed - you
- * must integrate the logic with the testing tool you use yourself.
  *
- * The flight recorder must be enabled and the flight recorder destination must be an absolute file name so
- * that the akka config can be used to find it. For example you could ensure a unique file per test using
- * something like this in your config:
- * {{{
- *   akka.remote.artery.advanced.flight-recorder {
- *     enabled=on
- *     destination=target/flight-recorder-${UUID.randomUUID().toString}.afr
- *   }
- * }}}
- *
- * You need to hook in dump and deletion of files where it makes sense in your tests. (For example, dump after all tests has
- * run and there was a failure and then delete)
+ * Provides test framework agnostic methods to dump the Java Flight Recorder data after a test has completed - you
+ * must integrate the logic with the testing tool you use yourself, calling `startFlightRecorder` on test start and
+ * stopping/dumping it after running/when failing with `stopFlightRecorder`
  */
 trait FlightRecordingSupport { self: MultiNodeSpec ⇒
-  private lazy val arteryEnabled =
-    RARP(system).provider.remoteSettings.Artery.Enabled
-  private lazy val flightRecorderFile: Path =
-    FileSystems.getDefault.getPath(RARP(system).provider.remoteSettings.Artery.Advanced.FlightRecorderDestination)
 
-  /**
-   * Delete flight the recorder file if it exists
-   */
-  final protected def deleteFlightRecorderFile(): Unit = {
-    if (arteryEnabled && destinationIsValidForDump() && Files.exists(flightRecorderFile)) {
-      Files.delete(flightRecorderFile)
+  private var recording: Option[Recording] = None
+
+  private lazy val automaticFlightRecorderPath =
+    Files.createTempFile(getClass.getName + UUID.randomUUID().toString, ".jfr")
+
+  def flightRecordingPath: Path = automaticFlightRecorderPath
+
+  def startFlightRecorder(): Unit = {
+    println("Starting flight recorder")
+    val rec = new Recording()
+    rec.setName(getClass.getName)
+    rec.start()
+    recording = Some(rec)
+  }
+
+  def stopFlightRecorder(dumpRecording: Boolean, printToStdOut: Boolean): Unit = {
+    recording match {
+      case Some(rec) ⇒
+        rec.stop()
+        if (dumpRecording || printToStdOut) {
+          println(s"Dumping flight recording to $flightRecordingPath")
+          rec.dump(flightRecordingPath)
+          if (printToStdOut) {
+            printFlightRecording(flightRecordingPath)
+          }
+        }
+        rec.close()
+      case None ⇒
+        throw new IllegalStateException("stopFlightRecorder called without first starting the flight recorder")
     }
+
   }
 
   /**
    * Dump the contents of the flight recorder file to standard output
    */
-  final protected def printFlightRecording(): Unit = {
-    if (arteryEnabled && destinationIsValidForDump() && Files.exists(flightRecorderFile)) {
-      // use stdout/println as we do not know if the system log is alive
-      println(s"FIXME Flight recorder dump from '$flightRecorderFile':")
-      // FlightRecorderReader.dumpToStdout(flightRecorderFile)
+  final protected def printFlightRecording(path: Path): Unit = {
+    // use stdout/println as we do not know if the system log is alive
+    println(s"Flight recorder dump")
+    RecordingFile.readAllEvents(path).asScala.foreach { event ⇒
+      print(s"${event.getStartTime} ${event.getEventType.getLabel}: ") // FIXME enumerate the properties somehow?
+      println(event.getFields.asScala.flatMap { valueDescriptor ⇒
+        valueDescriptor.getLabel match {
+          case "Duration" ⇒
+            if (!event.getDuration().isZero) Some(s"duration=${event.getDuration}")
+            else None
+
+          case "Stack Trace"  ⇒ None
+          case "Event Thread" ⇒ None // FIXME extract thread name
+          case "Start Time"   ⇒ None
+          case other ⇒
+            val name = if (other != null) other else valueDescriptor.getName
+            Some(s"$name=${event.getValue(valueDescriptor.getName)}")
+        }
+      }.mkString("[", ", ", "]"))
     }
   }
 
-  private def destinationIsValidForDump() = {
-    val path = flightRecorderFile.toString
-    path != "" && path.endsWith(".afr")
+  private def destinationIsValidForDump(path: Path): Boolean = {
+    val name = path.getFileName.toString
+    name != "" && name.endsWith(".jfr")
   }
 
 }

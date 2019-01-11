@@ -22,8 +22,9 @@ import scala.concurrent.duration._
 import scala.collection.immutable
 import java.util.concurrent.ConcurrentHashMap
 
-import akka.remote.DefaultFailureDetectorRegistry
+import akka.remote.{ DefaultFailureDetectorRegistry, RARP }
 import akka.cluster.ClusterEvent.{ MemberEvent, MemberRemoved }
+import jdk.jfr.{ Event, Label }
 
 import scala.concurrent.Await
 
@@ -99,8 +100,11 @@ trait MultiNodeClusterSpec extends Suite with STMultiNodeSpec with WatchedByCoro
   override def initialParticipants = roles.size
 
   private val cachedAddresses = new ConcurrentHashMap[RoleName, Address]
+  private val arteryEnabled = RARP(system).provider.remoteSettings.Artery.Enabled
 
   override protected def atStartup(): Unit = {
+    if (arteryEnabled)
+      startFlightRecorder()
     startCoroner()
     muteLog()
     self.atStartup()
@@ -109,10 +113,8 @@ trait MultiNodeClusterSpec extends Suite with STMultiNodeSpec with WatchedByCoro
   override protected def afterTermination(): Unit = {
     self.afterTermination()
     stopCoroner()
-    if (failed || sys.props.get("akka.remote.artery.always-dump-flight-recorder").isDefined) {
-      printFlightRecording()
-    }
-    deleteFlightRecorderFile()
+    if (arteryEnabled)
+      stopFlightRecorder(failed || sys.props.get("akka.remote.artery.always-dump-flight-recorder").isDefined, true)
   }
 
   override def expectedTestDuration = 60.seconds
