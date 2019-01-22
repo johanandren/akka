@@ -10,7 +10,7 @@ To use Cluster Metrics Extension, you must add the following dependency in your 
   version=$akka.version$
 }
 
-and add the following configuration stanza to your `application.conf`
+and add the following configuration line to your `application.conf`
 :
 
 ```
@@ -19,6 +19,8 @@ akka.extensions = [ "akka.cluster.metrics.ClusterMetricsExtension" ]
 
 ## Introduction
 
+and add the following configuration line to your `application.conf`
+:
 To enable usage of the extension you need to add the following dependency to your project:
 
 @@dependency[sbt,Maven,Gradle] {
@@ -217,4 +219,5 @@ Custom metrics collector implementation class must be specified in the
 
 The Cluster metrics extension can be configured with the following properties:
 
+@@snip [reference.conf]($akka$/akka-cluster-metrics/src/main/resources/reference.conf)
 @@snip [reference.conf](/akka-cluster-metrics/src/main/resources/reference.conf)
