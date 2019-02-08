@@ -5,6 +5,7 @@
 package akka.actor.typed
 package scaladsl
 
+import akka.actor.testkit.typed.TestException
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import org.scalatest.WordSpecLike
@@ -176,19 +177,19 @@ object StashSpec {
 
 }
 
-class ImmutableStashSpec extends StashSpec {
+class ImmutableStashSpec extends AbstractStashSpec {
   import StashSpec._
   def testQualifier: String = "immutable behavior"
   def behaviorUnderTest: Behavior[Command] = immutableStash
 }
 
-class MutableStashSpec extends StashSpec {
+class MutableStashSpec extends AbstractStashSpec {
   import StashSpec._
   def testQualifier: String = "mutable behavior"
   def behaviorUnderTest: Behavior[Command] = Behaviors.setup(context ⇒ new MutableStash(context))
 }
 
-abstract class StashSpec extends ScalaTestWithActorTestKit with WordSpecLike {
+abstract class AbstractStashSpec extends ScalaTestWithActorTestKit with WordSpecLike {
   import StashSpec._
 
   def testQualifier: String
@@ -241,4 +242,50 @@ abstract class StashSpec extends ScalaTestWithActorTestKit with WordSpecLike {
 
   }
 
+}
+
+class StashSpec extends ScalaTestWithActorTestKit with WordSpecLike {
+
+  "Stashing" must {
+
+    "signal PreRestart to the latest unstashed behavior" in {
+      val probe = TestProbe[Any]()
+      val stashingBehavior =
+        Behaviors.setup[String] { ctx ⇒
+          val stash = StashBuffer[String](10)
+          def unstashing(n: Int): Behavior[String] =
+            Behaviors.receiveMessage[String] {
+              case "stash" ⇒
+                probe.ref ! s"unstashing-$n"
+                unstashing(n + 1)
+              case "stash-fail" ⇒
+                probe.ref ! s"stash-fail-$n"
+                throw new TestException("unstash-fail")
+            }.receiveSignal {
+              case (_, PreRestart) ⇒
+                probe.ref ! s"pre-restart-$n"
+                Behaviors.same
+            }
+
+          Behaviors.receiveMessage[String] {
+            case msg if msg.startsWith("stash") ⇒
+              stash.stash(msg)
+              Behavior.same
+            case "unstash" ⇒
+              stash.unstashAll(ctx, unstashing(0))
+          }
+        }
+      val ref =
+        spawn(Behaviors.supervise(stashingBehavior)
+          .onFailure[Throwable](SupervisorStrategy.restart))
+
+      ref ! "stash"
+      ref ! "stash-fail"
+      ref ! "unstash"
+      probe.expectMessage("unstashing-0")
+      probe.expectMessage("stash-fail-1")
+      probe.expectMessage("pre-restart-1")
+    }
+
+  }
 }

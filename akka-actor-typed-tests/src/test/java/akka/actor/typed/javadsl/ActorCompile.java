@@ -93,20 +93,16 @@ public class ActorCompile {
             });
   }
 
-  static class MyBehavior extends ExtensibleBehavior<MyMsg> {
-
+  static class MyBehavior implements ExtensibleBehavior<MyMsg> {
     @Override
-    public Behavior<MyMsg> receiveSignal(TypedActorContext<MyMsg> context, Signal message)
-        throws Exception {
-      return this;
+    public Behavior<MyMsg> receive(TypedActorContext<MyMsg> ctx, MyMsg msg) throws Exception {
+      return Behaviors.same();
     }
 
     @Override
-    public Behavior<MyMsg> receive(TypedActorContext<MyMsg> context, MyMsg message)
+    public Behavior<MyMsg> receiveSignal(TypedActorContext<MyMsg> ctx, Signal msg)
         throws Exception {
-      ActorRef<String> adapter =
-          context.asJava().messageAdapter(String.class, s -> new MyMsgB(s.toUpperCase()));
-      return this;
+      return Behaviors.same();
     }
   }
 

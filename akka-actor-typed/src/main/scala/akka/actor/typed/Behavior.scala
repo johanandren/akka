@@ -75,7 +75,7 @@ abstract class Behavior[T] { behavior ⇒
  * Note that behaviors that keep an inner behavior, and intercepts messages for it should not be implemented as
  * an extensible behavior but should instead use the [[BehaviorInterceptor]]
  */
-abstract class ExtensibleBehavior[T] extends Behavior[T] {
+trait ExtensibleBehavior[T] extends Behavior[T] {
   /**
    * Process an incoming message and return the next behavior.
    *
@@ -410,40 +410,18 @@ object Behavior {
       case null ⇒ throw new InvalidMessageException("[null] is not an allowed behavior")
       case SameBehavior | UnhandledBehavior ⇒
         throw new IllegalArgumentException(s"cannot execute with [$behavior] as behavior")
-      case d: DeferredBehavior[_] ⇒ throw new IllegalArgumentException(s"deferred [$d] should not be passed to interpreter")
-      case IgnoreBehavior         ⇒ Behavior.same[T]
-      case s: StoppedBehavior[T]  ⇒ s
-      case f: FailedBehavior      ⇒ f
-      case EmptyBehavior          ⇒ Behavior.unhandled[T]
+      case IgnoreBehavior        ⇒ Behavior.same[T]
+      case s: StoppedBehavior[T] ⇒ s
+      case f: FailedBehavior     ⇒ f
+      case EmptyBehavior         ⇒ Behavior.unhandled[T]
       case ext: ExtensibleBehavior[T] ⇒
-        val possiblyDeferredResult = msg match {
+        msg match {
           case signal: Signal ⇒ ext.receiveSignal(ctx, signal)
           case m              ⇒ ext.receive(ctx, m.asInstanceOf[T])
         }
-        start(possiblyDeferredResult, ctx)
-    }
-  }
+      case d: DeferredBehavior[_] ⇒ throw new IllegalArgumentException(s"deferred [$d] should not be passed to interpreter")
 
-  /**
-   * INTERNAL API
-   *
-   * Execute the behavior with the given messages (or signals).
-   * The returned [[Behavior]] from each processed message is used for the next message.
-   */
-  @InternalApi private[akka] def interpretMessages[T](behavior: Behavior[T], ctx: TypedActorContext[T], messages: Iterator[T]): Behavior[T] = {
-    @tailrec def interpretOne(b: Behavior[T]): Behavior[T] = {
-      val b2 = Behavior.start(b, ctx)
-      if (!Behavior.isAlive(b2) || !messages.hasNext) b2
-      else {
-        val nextB = messages.next() match {
-          case sig: Signal ⇒ Behavior.interpretSignal(b2, ctx, sig)
-          case msg         ⇒ Behavior.interpretMessage(b2, ctx, msg)
-        }
-        interpretOne(Behavior.canonicalize(nextB, b, ctx)) // recursive
-      }
     }
-
-    interpretOne(Behavior.start(behavior, ctx))
   }
 
 }

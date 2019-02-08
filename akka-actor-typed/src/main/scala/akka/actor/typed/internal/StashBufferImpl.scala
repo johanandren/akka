@@ -8,10 +8,19 @@ import java.util.function.Consumer
 import java.util.function.{ Function ⇒ JFunction }
 
 import akka.actor.typed.Behavior
+import akka.actor.typed.Behavior.DeferredBehavior
+import akka.actor.typed.ExtensibleBehavior
+import akka.actor.typed.PostStop
+import akka.actor.typed.PreRestart
+import akka.actor.typed.Signal
+import akka.actor.typed.TypedActorContext
 import akka.actor.typed.javadsl
 import akka.actor.typed.scaladsl
+import akka.actor.typed.scaladsl.AbstractBehavior
 import akka.annotation.InternalApi
 import akka.util.ConstantFun
+
+import scala.annotation.tailrec
 
 /**
  * INTERNAL API
@@ -100,7 +109,45 @@ import akka.util.ConstantFun
       override def hasNext: Boolean = StashBufferImpl.this.nonEmpty
       override def next(): T = wrap(StashBufferImpl.this.dropHead())
     }.take(numberOfMessages)
-    Behavior.interpretMessages[T](behavior, ctx, iter)
+    new UnstashingBehavior[T](behavior, ctx, iter)
+  }
+
+  private final class UnstashingBehavior[T](behavior: Behavior[T], ctx: TypedActorContext[T], messages: Iterator[T]) extends DeferredBehavior[T] with ExtensibleBehavior[T] {
+    println("stashbuffer created unstashing behavior")
+    var lastBehavior = behavior
+
+    override def apply(ctx: TypedActorContext[T]): Behavior[T] = {
+      println("stashbuffer starting unstashing behavior")
+      @tailrec def interpretOne(b: Behavior[T]): Behavior[T] = {
+        val b2 = Behavior.start(b, ctx)
+        if (!Behavior.isAlive(b2) || !messages.hasNext) b2
+        else {
+          val nextMessage = messages.next()
+          println(s"stashbuffer unstashed $nextMessage, passing it to $lastBehavior")
+          val nextB = nextMessage match {
+            case sig: Signal ⇒ Behavior.interpretSignal(b2, ctx, sig)
+            case msg         ⇒ Behavior.interpretMessage(b2, ctx, msg)
+          }
+          lastBehavior = Behavior.start(Behavior.canonicalize(nextB, b, ctx), ctx)
+          interpretOne(lastBehavior) // recursive
+        }
+      }
+
+      interpretOne(Behavior.start(behavior, ctx))
+    }
+
+    override def receive(ctx: TypedActorContext[T], msg: T): Behavior[T] =
+      throw new IllegalStateException("Unstashing behavior should never receive any messages")
+
+    override def receiveSignal(ctx: TypedActorContext[T], msg: Signal): Behavior[T] = {
+      // pass on the restart or stop signals to the last unstashed behavior
+      msg match {
+        case PreRestart | PostStop ⇒
+          Behavior.interpretSignal(lastBehavior, ctx, msg)
+        case _ ⇒
+          throw new IllegalStateException(s"Unstashing behavior should never receive any other signals than PreRestart or PostStop, got $msg")
+      }
+    }
   }
 
   override def unstash(ctx: javadsl.ActorContext[T], behavior: Behavior[T],

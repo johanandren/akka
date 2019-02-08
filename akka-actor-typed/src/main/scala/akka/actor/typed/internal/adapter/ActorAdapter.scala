@@ -103,7 +103,7 @@ import akka.util.OptionVal
           // For the parent untyped supervisor to pick up the exception
           throw new TypedActorFailedException(f.cause)
         case _ ⇒
-          behavior = Behavior.canonicalize(b, behavior, ctx)
+          behavior = Behavior.start(Behavior.canonicalize(b, behavior, ctx), ctx)
       }
     }
   }

@@ -121,7 +121,8 @@ private[akka] final class BehaviorTestKitImpl[T](_path: ActorPath, _initialBehav
 
   override def run(message: T): Unit = {
     try {
-      currentUncanonical = Behavior.interpretMessage(current, context, message)
+      val interpreted = Behavior.interpretMessage(current, context, message)
+      currentUncanonical = Behavior.start(interpreted, context)
       current = Behavior.canonicalize(currentUncanonical, current, context)
       runAllTasks()
     } catch handleException

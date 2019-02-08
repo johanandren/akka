@@ -255,14 +255,17 @@ private class RestartSupervisor[O, T, Thr <: Throwable: ClassTag](initial: Behav
   }
 
   override protected def handleSignalException(ctx: TypedActorContext[O], target: SignalTarget[T]): Catcher[Behavior[T]] = {
+    println("RestartingSupervisor signalling restart to: " + target)
     handleException(ctx, () ⇒ target(ctx, PreRestart))
   }
   override protected def handleReceiveException(ctx: TypedActorContext[O], target: ReceiveTarget[T]): Catcher[Behavior[T]] = {
+    println("RestartingSupervisor signalling restart to: " + target)
     handleException(ctx, () ⇒ target.signalRestart(ctx))
   }
 
   private def handleException(ctx: TypedActorContext[O], signalRestart: () ⇒ Unit): Catcher[Behavior[T]] = {
     case NonFatal(t: Thr) ⇒
+      println("RestartingSupervisor handle exception: " + t.getClass.getName)
       if (strategy.maxRestarts != -1 && restartCount >= strategy.maxRestarts && deadlineHasTimeLeft) {
         strategy match {
           case _: Restart ⇒ throw t

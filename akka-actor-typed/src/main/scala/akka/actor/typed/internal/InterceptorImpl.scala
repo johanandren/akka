@@ -8,6 +8,7 @@ import akka.actor.typed
 import akka.actor.typed.Behavior.{ SameBehavior, UnhandledBehavior }
 import akka.actor.typed.LogOptions.LogOptionsImpl
 import akka.actor.typed.internal.TimerSchedulerImpl.TimerMsg
+import akka.actor.typed.internal.adapter.ActorContextAdapter
 import akka.actor.typed.{ LogOptions, _ }
 import akka.annotation.InternalApi
 import akka.util.LineNumbers
@@ -34,10 +35,12 @@ private[akka] object InterceptorImpl {
  * INTERNAL API
  */
 @InternalApi
-private[akka] final class InterceptorImpl[O, I](val interceptor: BehaviorInterceptor[O, I], val nestedBehavior: Behavior[I])
+private[akka] final class InterceptorImpl[O, I](val interceptor: BehaviorInterceptor[O, I], var _nestedBehavior: Behavior[I])
   extends ExtensibleBehavior[O] with WrappingBehavior[O, I] {
 
   import BehaviorInterceptor._
+
+  override def nestedBehavior: Behavior[I] = _nestedBehavior
 
   private val preStartTarget: PreStartTarget[I] = new PreStartTarget[I] {
     override def start(ctx: TypedActorContext[_]): Behavior[I] = {
@@ -49,13 +52,17 @@ private[akka] final class InterceptorImpl[O, I](val interceptor: BehaviorInterce
     override def apply(ctx: TypedActorContext[_], msg: I): Behavior[I] =
       Behavior.interpretMessage(nestedBehavior, ctx.asInstanceOf[TypedActorContext[I]], msg)
 
-    override def signalRestart(ctx: TypedActorContext[_]): Unit =
+    override def signalRestart(ctx: TypedActorContext[_]): Unit = {
+      println(s"interceptor $interceptor signalling restart to $nestedBehavior")
       Behavior.interpretSignal(nestedBehavior, ctx.asInstanceOf[TypedActorContext[I]], PreRestart)
+    }
   }
 
   private val signalTarget = new SignalTarget[I] {
-    override def apply(ctx: TypedActorContext[_], signal: Signal): Behavior[I] =
+    override def apply(ctx: TypedActorContext[_], signal: Signal): Behavior[I] = {
+      println(s"interceptor $interceptor signalling $signal to $nestedBehavior")
       Behavior.interpretSignal(nestedBehavior, ctx.asInstanceOf[TypedActorContext[I]], signal)
+    }
   }
 
   // invoked pre-start to start/de-duplicate the initial behavior stack
@@ -74,16 +81,29 @@ private[akka] final class InterceptorImpl[O, I](val interceptor: BehaviorInterce
         interceptor.aroundReceive(ctx, msg, receiveTarget)
       else
         receiveTarget.apply(ctx, msg.asInstanceOf[I])
+    // keep track of the returned behavior also before we start it
+    if (result != Behavior.same)
+      _nestedBehavior = result
+    println(s"interceptor $interceptor intermediate nested behavior: ${_nestedBehavior}, result: $result")
     deduplicate(result, ctx)
   }
 
   override def receiveSignal(ctx: typed.TypedActorContext[O], signal: Signal): Behavior[O] = {
+    println(s"interceptor $interceptor receive signal: ${_nestedBehavior}, $signal")
     val interceptedResult = interceptor.aroundSignal(ctx, signal, signalTarget)
+    // keep track of the returned behavior also before we start it
+    if (interceptedResult != Behavior.same)
+      _nestedBehavior = interceptedResult
+    println(s"interceptor $interceptor receive signal: intermediate nested behavior: ${_nestedBehavior}, interceptedResult: $interceptedResult")
     deduplicate(interceptedResult, ctx)
   }
 
   private def deduplicate(interceptedResult: Behavior[I], ctx: TypedActorContext[O]): Behavior[O] = {
+    println(s"interceptor $interceptor starting, _nestedBehavior: ${nestedBehavior}, interceptedResult: $interceptedResult")
     val started = Behavior.start(interceptedResult, ctx.asInstanceOf[TypedActorContext[I]])
+    if (started != Behavior.same)
+      _nestedBehavior = started
+    println(s"interceptor $interceptor started intermediate nested behavior: ${nestedBehavior}, started: $started")
     if (started == UnhandledBehavior || started == SameBehavior || !Behavior.isAlive(started)) {
       started.unsafeCast[O]
     } else {
@@ -94,7 +114,9 @@ private[akka] final class InterceptorImpl[O, I](val interceptor: BehaviorInterce
       }
 
       if (duplicateInterceptExists) started.unsafeCast[O]
-      else new InterceptorImpl[O, I](interceptor, started)
+      else {
+        this
+      }
     }
   }
 
