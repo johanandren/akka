@@ -8,6 +8,7 @@ import akka.actor.testkit.typed.scaladsl.{ ScalaTestWithActorTestKit, TestProbe 
 import akka.actor.typed.{ ActorRef, Behavior }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.RecoveryCompleted
 import com.typesafe.config.ConfigFactory
 import org.scalatest.WordSpecLike
 
@@ -37,9 +38,10 @@ class EventSourcedSequenceNumberSpec extends ScalaTestWithActorTestKit(EventSour
           probe ! (EventSourcedBehavior.lastSequenceNumber(ctx) + " eventHandler")
           state + evt
         }
-      ).onRecoveryCompleted(_ ⇒
-          probe ! (EventSourcedBehavior.lastSequenceNumber(ctx) + " onRecoveryComplete")
-        )
+      ).receiveSignal {
+          case RecoveryCompleted(_) ⇒
+            probe ! (EventSourcedBehavior.lastSequenceNumber(ctx) + " onRecoveryComplete")
+        }
     )
 
   "The sequence number" must {

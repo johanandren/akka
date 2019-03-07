@@ -6,7 +6,6 @@ package akka.persistence.typed.internal
 
 import scala.util.control.NonFatal
 import scala.util.control.NoStackTrace
-
 import akka.actor.typed.Behavior
 import akka.actor.typed.internal.PoisonPill
 import akka.actor.typed.Signal
@@ -15,6 +14,7 @@ import akka.annotation.InternalApi
 import akka.event.Logging
 import akka.persistence.JournalProtocol._
 import akka.persistence._
+import akka.persistence.typed.RecoveryFailed
 import akka.persistence.typed.internal.ReplayingEvents.FailureWhileUnstashing
 import akka.persistence.typed.internal.ReplayingEvents.ReplayingState
 import akka.persistence.typed.internal.Running.WithSeqNrAccessible
@@ -160,9 +160,9 @@ private[akka] final class ReplayingEvents[C, E, S](
    */
   protected def onRecoveryFailure(cause: Throwable, sequenceNr: Long, message: Option[Any]): Behavior[InternalProtocol] = {
     try {
-      setup.onRecoveryFailure(cause)
+      setup.onSignal(RecoveryFailed(cause))
     } catch {
-      case NonFatal(t) ⇒ setup.log.error(t, "onRecoveryFailure threw exception")
+      case NonFatal(t) ⇒ setup.log.error(t, "RecoveryFailed signal handler threw exception")
     }
     setup.cancelRecoveryTimer()
     tryReturnRecoveryPermit("on replay failure: " + cause.getMessage)
@@ -180,7 +180,7 @@ private[akka] final class ReplayingEvents[C, E, S](
 
   protected def onRecoveryCompleted(state: ReplayingState[S]): Behavior[InternalProtocol] = try {
     tryReturnRecoveryPermit("replay completed successfully")
-    setup.recoveryCompleted(state.state)
+    setup.onSignal(akka.persistence.typed.RecoveryCompleted(state.state))
 
     if (state.receivedPoisonPill && isInternalStashEmpty && !isUnstashAllInProgress)
       Behaviors.stopped

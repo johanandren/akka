@@ -10,6 +10,7 @@ import akka.actor.typed.{ ActorRef, Behavior }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.TimerScheduler
 import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.RecoveryCompleted
 import akka.persistence.typed.SideEffect
 
 import scala.concurrent.Future
@@ -75,34 +76,36 @@ object PersistentActorCompileOnlyTest {
         .foreach(sender ! _)
     }
 
-    val behavior: Behavior[Command] = Behaviors.setup(ctx ⇒
-      EventSourcedBehavior[Command, Event, EventsInFlight](
-        persistenceId = PersistenceId("recovery-complete-id"),
+    val behavior: Behavior[Command] =
+      Behaviors.setup(ctx ⇒
+        EventSourcedBehavior[Command, Event, EventsInFlight](
+          persistenceId = PersistenceId("recovery-complete-id"),
 
-        emptyState = EventsInFlight(0, Map.empty),
+          emptyState = EventsInFlight(0, Map.empty),
 
-        commandHandler = (state, cmd) ⇒ cmd match {
-          case DoSideEffect(data) ⇒
-            Effect.persist(IntentRecorded(state.nextCorrelationId, data)).thenRun { _ ⇒
-              performSideEffect(ctx.self, state.nextCorrelationId, data)
-            }
-          case AcknowledgeSideEffect(correlationId) ⇒
-            Effect.persist(SideEffectAcknowledged(correlationId))
-        },
+          commandHandler = (state, cmd) ⇒ cmd match {
+            case DoSideEffect(data) ⇒
+              Effect.persist(IntentRecorded(state.nextCorrelationId, data)).thenRun { _ ⇒
+                performSideEffect(ctx.self, state.nextCorrelationId, data)
+              }
+            case AcknowledgeSideEffect(correlationId) ⇒
+              Effect.persist(SideEffectAcknowledged(correlationId))
+          },
 
-        eventHandler = (state, evt) ⇒ evt match {
-          case IntentRecorded(correlationId, data) ⇒
-            EventsInFlight(
-              nextCorrelationId = correlationId + 1,
-              dataByCorrelationId = state.dataByCorrelationId + (correlationId → data))
-          case SideEffectAcknowledged(correlationId) ⇒
-            state.copy(dataByCorrelationId = state.dataByCorrelationId - correlationId)
-        }).onRecoveryCompleted(state ⇒
-          state.dataByCorrelationId.foreach {
-            case (correlationId, data) ⇒ performSideEffect(ctx.self, correlationId, data)
+          eventHandler = (state, evt) ⇒ evt match {
+            case IntentRecorded(correlationId, data) ⇒
+              EventsInFlight(
+                nextCorrelationId = correlationId + 1,
+                dataByCorrelationId = state.dataByCorrelationId + (correlationId → data))
+            case SideEffectAcknowledged(correlationId) ⇒
+              state.copy(dataByCorrelationId = state.dataByCorrelationId - correlationId)
+          }).receiveSignal {
+            case RecoveryCompleted(state: EventsInFlight) ⇒
+              state.dataByCorrelationId.foreach {
+                case (correlationId, data) ⇒ performSideEffect(ctx.self, correlationId, data)
+              }
           }
-        )
-    )
+      )
 
   }
 
@@ -285,9 +288,10 @@ object PersistentActorCompileOnlyTest {
         eventHandler = (state, evt) ⇒ evt match {
           case ItemAdded(id)   ⇒ id +: state
           case ItemRemoved(id) ⇒ state.filter(_ != id)
-        }).onRecoveryCompleted(state ⇒
-          state.foreach(id ⇒ metadataRegistry ! GetMetaData(id, adapt))
-        )
+        }).receiveSignal {
+          case RecoveryCompleted(state: List[Id]) ⇒
+            state.foreach(id ⇒ metadataRegistry ! GetMetaData(id, adapt))
+        }
     }
   }
 

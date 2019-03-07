@@ -6,19 +6,20 @@ package akka.persistence.typed.internal
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
-
 import akka.Done
 import akka.actor.Cancellable
 import akka.actor.typed.Logger
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.ActorRef
 import akka.actor.ExtendedActorSystem
+import akka.actor.typed.Signal
 import akka.annotation.InternalApi
 import akka.persistence._
 import akka.persistence.typed.EventAdapter
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.util.Collections.EmptyImmutableSeq
+import akka.util.ConstantFun
 import akka.util.OptionVal
 
 /**
@@ -32,9 +33,7 @@ private[akka] final class BehaviorSetup[C, E, S](
   val commandHandler:        EventSourcedBehavior.CommandHandler[C, E, S],
   val eventHandler:          EventSourcedBehavior.EventHandler[S, E],
   val writerIdentity:        EventSourcedBehaviorImpl.WriterIdentity,
-  val recoveryCompleted:     S ⇒ Unit,
-  val onRecoveryFailure:     Throwable ⇒ Unit,
-  val onSnapshot:            (SnapshotMetadata, Try[Done]) ⇒ Unit,
+  private val signalHandler: PartialFunction[Signal, Unit],
   val tagger:                E ⇒ Set[String],
   val eventAdapter:          EventAdapter[E, _],
   val snapshotWhen:          (S, E, Long) ⇒ Boolean,
@@ -105,6 +104,10 @@ private[akka] final class BehaviorSetup[C, E, S](
       case OptionVal.None    ⇒
     }
     recoveryTimer = OptionVal.None
+  }
+
+  def onSignal(signal: Signal): Unit = {
+    signalHandler.applyOrElse(signal, ConstantFun.scalaAnyToUnit)
   }
 
 }
