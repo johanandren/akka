@@ -63,7 +63,7 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
   snapshotWhen:        (State, Event, Long) ⇒ Boolean                             = ConstantFun.scalaAnyThreeToFalse,
   recovery:            Recovery                                                   = Recovery(),
   supervisionStrategy: SupervisorStrategy                                         = SupervisorStrategy.stop,
-  signalHandler:       Option[PartialFunction[Signal, Unit]]                      = None
+  _signalHandler:      Option[PartialFunction[Signal, Unit]]                      = None
 ) extends EventSourcedBehavior[Command, Event, State] {
 
   import EventSourcedBehaviorImpl.WriterIdentity
@@ -76,7 +76,7 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
     // stashState outside supervise because StashState should survive restarts due to persist failures
     val stashState = new StashState(settings)
 
-    val actualSignalHandler: PartialFunction[Signal, Unit] = signalHandler match {
+    val actualSignalHandler: PartialFunction[Signal, Unit] = _signalHandler match {
       case Some(userProvided) ⇒ userProvided
       case None ⇒
         // default signal handler
@@ -146,7 +146,12 @@ private[akka] final case class EventSourcedBehaviorImpl[Command, Event, State](
   }
 
   override def receiveSignal(handler: PartialFunction[Signal, Unit]): EventSourcedBehavior[Command, Event, State] =
-    copy(signalHandler = Some(handler))
+    copy(_signalHandler = Some(handler))
+
+  override def signalHandler: PartialFunction[Signal, Unit] = _signalHandler match {
+    case Some(handler) ⇒ handler
+    case None          ⇒ PartialFunction.empty
+  }
 
   override def snapshotWhen(predicate: (State, Event, Long) ⇒ Boolean): EventSourcedBehavior[Command, Event, State] =
     copy(snapshotWhen = predicate)

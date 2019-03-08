@@ -14,6 +14,7 @@ import akka.actor.testkit.typed.scaladsl._
 import akka.actor.typed.ActorRef
 import akka.actor.typed.PostStop
 import akka.actor.typed.PreRestart
+import akka.actor.typed.Signal
 import akka.actor.typed.SupervisorStrategy
 import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.AtomicWrite
@@ -77,7 +78,11 @@ class EventSourcedBehaviorFailureSpec extends ScalaTestWithActorTestKit(EventSou
 
   implicit val testSettings: TestKitSettings = TestKitSettings(system)
 
-  def failingPersistentActor(pid: PersistenceId, probe: ActorRef[String]): EventSourcedBehavior[String, String, String] =
+  def failingPersistentActor(
+    pid:                     PersistenceId,
+    probe:                   ActorRef[String],
+    additionalSignalHandler: PartialFunction[Signal, Unit] = PartialFunction.empty
+  ): EventSourcedBehavior[String, String, String] =
     EventSourcedBehavior[String, String, String](
       pid, "",
       (_, cmd) ⇒ {
@@ -90,14 +95,14 @@ class EventSourcedBehaviorFailureSpec extends ScalaTestWithActorTestKit(EventSou
         probe.tell(event)
         state + event
       }
-    ).receiveSignal {
+    ).receiveSignal(additionalSignalHandler.orElse {
         case RecoveryCompleted(_) ⇒
           probe.tell("starting")
         case PostStop ⇒
           probe.tell("stopped")
         case PreRestart ⇒
           probe.tell("restarting")
-      }.onPersistFailure(SupervisorStrategy.restartWithBackoff(1.milli, 5.millis, 0.1)
+      }).onPersistFailure(SupervisorStrategy.restartWithBackoff(1.milli, 5.millis, 0.1)
         .withLoggingEnabled(enabled = false))
 
   "A typed persistent actor (failures)" must {
@@ -105,11 +110,11 @@ class EventSourcedBehaviorFailureSpec extends ScalaTestWithActorTestKit(EventSou
     "call onRecoveryFailure when replay fails" in {
       val probe = TestProbe[String]()
       val excProbe = TestProbe[Throwable]()
-      spawn(failingPersistentActor(PersistenceId("fail-recovery"), probe.ref)
-        .receiveSignal {
-          case RecoveryFailed(t) ⇒
-            excProbe.ref ! t
-        })
+      spawn(failingPersistentActor(PersistenceId("fail-recovery"), probe.ref, {
+        case RecoveryFailed(t) ⇒
+          println("signal recovery failed")
+          excProbe.ref ! t
+      }))
 
       excProbe.expectMessageType[TestException].message shouldEqual "Nope"
       probe.expectMessage("restarting")
@@ -117,11 +122,10 @@ class EventSourcedBehaviorFailureSpec extends ScalaTestWithActorTestKit(EventSou
 
     "handle exceptions in onRecoveryFailure" in {
       val probe = TestProbe[String]()
-      val pa = spawn(failingPersistentActor(PersistenceId("fail-recovery-twice"), probe.ref)
-        .receiveSignal {
-          case RecoveryFailed(t) ⇒
-            throw TestException("recovery call back failure")
-        })
+      val pa = spawn(failingPersistentActor(PersistenceId("fail-recovery-twice"), probe.ref, {
+        case RecoveryFailed(t) ⇒
+          throw TestException("recovery call back failure")
+      }))
       pa ! "one"
       probe.expectMessage("starting")
       probe.expectMessage("persisting")

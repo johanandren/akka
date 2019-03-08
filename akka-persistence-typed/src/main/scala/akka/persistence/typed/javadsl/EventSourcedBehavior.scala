@@ -11,7 +11,6 @@ import akka.actor.typed
 import akka.actor.typed.BackoffSupervisorStrategy
 import akka.actor.typed.Behavior
 import akka.actor.typed.Behavior.DeferredBehavior
-import akka.actor.typed.Signal
 import akka.actor.typed.javadsl.ActorContext
 import akka.annotation.ApiMayChange
 import akka.annotation.InternalApi
@@ -71,10 +70,18 @@ abstract class EventSourcedBehavior[Command, Event, State >: Null] private[akka]
    */
   protected def eventHandler(): EventHandler[State, Event]
 
-  // FIXME we need a builder?
-  protected def signalHandler(): SignalHandler = SignalHandler.EmptySignalHandler
+  /**
+   * Override to react on general lifecycle signals and persistence specific signals (subtypes of
+   * [[akka.persistence.typed.EventSourcedSignal]]).
+   *
+   * Use [[EventSourcedBehavior#newSignalHandlerBuilder]] to define the signal handler.
+   */
+  protected def signalHandler(): SignalHandler = SignalHandler.Empty
 
-  final protected def newSignalHandlerBuilder(): SignalHandlerBuilder = new SignalHandlerBuilder
+  /**
+   * @return A new, mutable signal handler builder
+   */
+  protected final def newSignalHandlerBuilder(): SignalHandlerBuilder = new SignalHandlerBuilder
 
   /**
    * @return A new, mutable, command handler builder
@@ -147,16 +154,21 @@ abstract class EventSourcedBehavior[Command, Event, State >: Null] private[akka]
       .withTagger(tagger)
       .eventAdapter(eventAdapter())
 
+    val sh = signalHandler()
+    val behaviorWithSh =
+      if (sh.isEmpty) behavior
+      else behavior.receiveSignal(sh.handler)
+
     if (onPersistFailure.isPresent)
-      behavior.onPersistFailure(onPersistFailure.get)
+      behaviorWithSh.onPersistFailure(onPersistFailure.get)
     else
-      behavior
+      behaviorWithSh
   }
 
   /**
    * The last sequence number that was persisted, can only be called from inside the handlers of an `EventSourcedBehavior`
    */
-  def lastSequenceNumber(ctx: ActorContext[_]): Long = {
+  final def lastSequenceNumber(ctx: ActorContext[_]): Long = {
     scaladsl.EventSourcedBehavior.lastSequenceNumber(ctx.asScala)
   }
 

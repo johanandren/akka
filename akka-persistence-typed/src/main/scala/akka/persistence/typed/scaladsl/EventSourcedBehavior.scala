@@ -130,7 +130,12 @@ object EventSourcedBehavior {
    * Akka Persistence specific signals (snapshot and recovery related). Those are all subtypes of
    * [[akka.persistence.typed.EventSourcedSignal]]
    */
-  def receiveSignal(handler: PartialFunction[Signal, Unit]): EventSourcedBehavior[Command, Event, State]
+  def receiveSignal(signalHandler: PartialFunction[Signal, Unit]): EventSourcedBehavior[Command, Event, State]
+
+  /**
+   * @return The currently defined signal handler or an empty handler if no custom handler previously defined
+   */
+  def signalHandler: PartialFunction[Signal, Unit]
 
   /**
    * Initiates a snapshot if the given function returns true.
