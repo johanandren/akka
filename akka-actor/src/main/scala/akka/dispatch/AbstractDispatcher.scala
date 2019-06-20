@@ -36,12 +36,14 @@ object Envelope {
   }
 }
 
-final case class TaskInvocation(eventStream: EventStream, runnable: Runnable, cleanup: () => Unit) extends Batchable {
-  final override def isBatchable: Boolean = runnable match {
-    case b: Batchable                           => b.isBatchable
-    case _: scala.concurrent.OnCompleteRunnable => true
-    case _                                      => false
-  }
+object TaskInvocation {
+  def apply(eventStream: EventStream, runnable: Runnable, cleanup: () => Unit): TaskInvocation =
+    runnable match {
+      case b: Batchable => new TaskInvocation(eventStream, b, cleanup) with Batchable
+      case r            => new TaskInvocation(eventStream, r, cleanup)
+    }
+}
+sealed case class TaskInvocation(eventStream: EventStream, runnable: Runnable, cleanup: () => Unit) extends Runnable {
 
   def run(): Unit =
     try runnable.run()
@@ -153,8 +155,9 @@ abstract class MessageDispatcher(val configurator: MessageDispatcherConfigurator
     try unregister(actor)
     finally ifSensibleToDoSoThenScheduleShutdown()
   final protected def resubmitOnBlock: Boolean = true // We want to avoid starvation
-  final override protected def unbatchedExecute(r: Runnable): Unit = {
-    val invocation = TaskInvocation(eventStream, r, taskCleanup)
+
+  override protected def submitForExecution(runnable: Runnable): Unit = {
+    val invocation = TaskInvocation(eventStream, runnable, taskCleanup)
     addInhabitants(+1)
     try {
       executeTask(invocation)
@@ -162,6 +165,13 @@ abstract class MessageDispatcher(val configurator: MessageDispatcherConfigurator
       case t: Throwable =>
         addInhabitants(-1)
         throw t
+    }
+  }
+
+  override def execute(runnable: Runnable): Unit = {
+    runnable match {
+      case b: Batchable => submitAsyncBatched(b)
+      case r            => submitForExecution(r)
     }
   }
 
