@@ -6,6 +6,7 @@ package docs.io
 
 import java.net.{ Inet6Address, InetSocketAddress, NetworkInterface, StandardProtocolFamily }
 import java.nio.channels.DatagramChannel
+
 import scala.util.Random
 import akka.actor.{ ActorSystem, Props }
 import akka.io.Udp
@@ -14,10 +15,12 @@ import org.scalatest.{ BeforeAndAfter, WordSpecLike }
 import org.scalatest.BeforeAndAfterAll
 import akka.testkit.SocketUtil
 import akka.util.ccompat.JavaConverters._
+import org.scalatest.Matchers
 
 class ScalaUdpMulticastSpec
     extends TestKit(ActorSystem("ScalaUdpMulticastSpec"))
     with WordSpecLike
+    with Matchers
     with BeforeAndAfterAll {
 
   "listener" should {
@@ -37,7 +40,9 @@ class ScalaUdpMulticastSpec
         // on the platform (awsdl0 can't be used on OSX, docker[0-9] can't be used in a docker machine etc.)
         // therefore: try hard to find an interface that _does_ work, and only fail if there was any potentially
         // working interfaces but all failed
-        ipv6ifaces.exists { ipv6iface =>
+        val atLeastOneIfaceWorked = ipv6ifaces.exists { ipv6iface =>
+          system.log.info("Trying interface {}", ipv6iface)
+
           // host assigned link local multicast address http://tools.ietf.org/html/rfc3307#section-4.3.2
           // generate a random 32 bit multicast address with the high order bit set
           val randomAddress: String = (Random.nextInt().abs.toLong | (1L << 31)).toHexString.toUpperCase
@@ -46,6 +51,7 @@ class ScalaUdpMulticastSpec
           val msg = "ohi"
           val sink = testActor
           val iface = ipv6iface.getName
+          system.log.info("Binding listener, iface: {}, group: {}, port: {}", iface, group, port)
           val listener = system.actorOf(Props(classOf[Listener], iface, group, port, sink))
           try {
             expectMsgType[Udp.Bound]
@@ -64,6 +70,7 @@ class ScalaUdpMulticastSpec
             system.stop(listener)
           }
         }
+        atLeastOneIfaceWorked should ===(true)
       }
 
     }

@@ -63,6 +63,7 @@ public class JavaUdpMulticastTest extends AbstractJavaTest {
           for (Iterator<NetworkInterface> interfaceIterator = ipv6Ifaces.iterator();
               interfaceIterator.hasNext(); ) {
             NetworkInterface ipv6Iface = interfaceIterator.next();
+            system.log().info("Trying interface {}", ipv6Iface);
             // host assigned link local multicast address
             // http://tools.ietf.org/html/rfc3307#section-4.3.2
             // generate a random 32 bit multicast address with the high order bit set
@@ -80,6 +81,9 @@ public class JavaUdpMulticastTest extends AbstractJavaTest {
             final ActorRef sink = getRef();
             final String iface = ipv6Iface.getName();
 
+            system
+                .log()
+                .info("Binding listener, iface: {}, group: {}, port: {}", iface, group, port);
             final ActorRef listener =
                 system.actorOf(
                     Props.create(JavaUdpMulticast.Listener.class, iface, group, port, sink));
