@@ -24,7 +24,7 @@ object Jdk9 extends AutoPlugin {
           (Compile / sourceDirectory).value / SCALA_SOURCE_DIRECTORY,
           (Compile / sourceDirectory).value / JAVA_SOURCE_DIRECTORY)),
     scalacOptions := AkkaBuild.DefaultScalacOptions ++ notOnJdk8(Seq("-release", "11")),
-    javacOptions := AkkaBuild.DefaultJavacOptions ++ notOnJdk8(Seq("--release", "11")))
+    javacOptions := AkkaBuild.DefaultJavacOptions ++ notOnJdk8(Seq("--release", "11", "--add-module", "jdk.unsupported")))
 
   val compileSettings = Seq(
     // It might have been more 'neat' to add the jdk9 products to the jar via packageBin/mappings, but that doesn't work with the OSGi plugin,
