@@ -255,7 +255,7 @@ object ByteString {
     override def copyToArray[B >: Byte](dest: Array[B], start: Int, len: Int): Int = {
       val toCopy = math.min(math.min(len, bytes.length), dest.length - start)
       if (toCopy > 0) {
-        Array.copy(bytes, 0, dest, start, toCopy)
+        System.arraycopy(bytes, 0, dest, start, toCopy)
       }
       toCopy
     }
@@ -397,7 +397,7 @@ object ByteString {
       // min of the bytes available to copy, bytes there is room for in dest and the requested number of bytes
       val toCopy = math.min(math.min(len, length), dest.length - start)
       if (toCopy > 0) {
-        Array.copy(bytes, startIndex, dest, start, toCopy)
+        System.arraycopy(bytes, startIndex, dest, start, toCopy)
       }
       toCopy
     }
