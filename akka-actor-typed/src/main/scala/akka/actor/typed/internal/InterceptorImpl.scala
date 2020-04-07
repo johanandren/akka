@@ -4,15 +4,15 @@
 
 package akka.actor.typed.internal
 
-import scala.reflect.ClassTag
 import akka.actor.typed
+import akka.actor.typed.{ LogOptions, _ }
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.LogOptions
-import akka.actor.typed._
 import akka.annotation.InternalApi
 import akka.util.LineNumbers
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+
+import scala.reflect.ClassTag
 
 /**
  * Provides the impl of any behavior that could nest another behavior
@@ -72,14 +72,16 @@ private[akka] final class InterceptorImpl[O, I](
     deduplicate(started, ctx)
   }
 
-  def replaceNested(newNested: Behavior[I]): Behavior[O] =
-    new InterceptorImpl(interceptor, newNested)
+  def replaceNested(newNested: Behavior[I]): Behavior[O] = {
+    if (newNested eq nestedBehavior) this else new InterceptorImpl(interceptor, newNested)
+  }
 
   override def receive(ctx: typed.TypedActorContext[O], msg: O): Behavior[O] = {
-    // TODO performance optimization could maybe to avoid isAssignableFrom if interceptMessageClass is Class[Object]?
     val interceptMessageClass = interceptor.interceptMessageClass
     val result =
-      if ((interceptMessageClass ne null) && interceptor.interceptMessageClass.isAssignableFrom(msg.getClass))
+      if ((interceptMessageClass ne null) &&
+          (interceptMessageClass == classOf[java.lang.Object] ||
+          interceptMessageClass.isAssignableFrom(msg.getClass)))
         interceptor.aroundReceive(ctx, msg, receiveTarget)
       else
         receiveTarget.apply(ctx, msg.asInstanceOf[I])
