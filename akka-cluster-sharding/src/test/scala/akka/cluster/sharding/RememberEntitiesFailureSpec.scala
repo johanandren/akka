@@ -273,42 +273,6 @@ class RememberEntitiesFailureSpec
         system.stop(sharding)
       }
 
-      s"recover on abrupt entity stop when storing a stop event fails $wayToFail" in {
-        val storeProbe = TestProbe()
-        system.eventStream.subscribe(storeProbe.ref, classOf[ShardStoreCreated])
-
-        val sharding = ClusterSharding(system).start(
-          s"shardStoreStopAbrupt-$wayToFail",
-          Props[EntityActor],
-          ClusterShardingSettings(system).withRememberEntities(true),
-          extractEntityId,
-          extractShardId)
-
-        val probe = TestProbe()
-
-        // trigger shard start and store creation
-        sharding.tell(EntityEnvelope(1, "hello-1"), probe.ref)
-        val shard1Store = storeProbe.expectMsgType[ShardStoreCreated].store
-        probe.expectMsg("hello-1")
-
-        // fail it when stopping
-        shard1Store.tell(FakeShardStoreActor.FailUpdateEntity(wayToFail), storeProbe.ref)
-        storeProbe.expectMsg(Done)
-
-        // FIXME restart without passivating is not saved and re-started again without storing the stop so this isn't testing anything
-        sharding ! EntityEnvelope(1, "stop")
-
-        shard1Store.tell(FakeShardStoreActor.ClearFail, storeProbe.ref)
-        storeProbe.expectMsg(Done)
-
-        // it takes a while - timeout hits and then backoff
-        awaitAssert({
-          sharding.tell(EntityEnvelope(1, "hello-2"), probe.ref)
-          probe.expectMsg("hello-2")
-        }, 10.seconds)
-        system.stop(sharding)
-      }
-
       s"recover on graceful entity stop when storing a stop event fails $wayToFail" in {
         val storeProbe = TestProbe()
         system.eventStream.subscribe(storeProbe.ref, classOf[ShardStoreCreated])
