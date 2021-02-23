@@ -761,6 +761,7 @@ private[akka] class LocalActorRefProvider private[akka] (
           serializationInformationCache = OptionVal.Some(info)
           info
         }
+      case unexpected => throw new RuntimeException(s"Unexpected: $unexpected") // OptionVal exhaustiveness problem
     }
   }
 
@@ -774,6 +775,7 @@ private[akka] class LocalActorRefProvider private[akka] (
         val addr = getDefaultAddress.toString
         _addressString = OptionVal.Some(addr)
         addr
+      case unexpected => throw new RuntimeException(s"Unexpected: $unexpected") // OptionVal exhaustiveness problem
     }
   }
 }
