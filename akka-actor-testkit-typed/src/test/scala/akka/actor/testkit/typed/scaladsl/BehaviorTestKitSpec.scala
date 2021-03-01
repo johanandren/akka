@@ -130,6 +130,8 @@ object BehaviorTestKitSpec {
             case CancelScheduleCommand(key) =>
               timers.cancel(key)
               Behaviors.same
+            case unexpected =>
+              throw new RuntimeException(s"Unexpected command: $unexpected")
           }
         }
         .receiveSignal {
