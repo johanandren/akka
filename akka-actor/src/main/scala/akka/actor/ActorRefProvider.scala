@@ -753,7 +753,7 @@ private[akka] class LocalActorRefProvider private[akka] (
     Serialization.Information(getDefaultAddress, system)
     serializationInformationCache match {
       case OptionVal.Some(info) => info
-      case OptionVal.None =>
+      case _ =>
         if (system eq null)
           throw new IllegalStateException("Too early access of serializationInformation")
         else {
@@ -761,7 +761,6 @@ private[akka] class LocalActorRefProvider private[akka] (
           serializationInformationCache = OptionVal.Some(info)
           info
         }
-      case unexpected => throw new RuntimeException(s"Unexpected: $unexpected") // OptionVal exhaustiveness problem
     }
   }
 
@@ -771,11 +770,10 @@ private[akka] class LocalActorRefProvider private[akka] (
   override private[akka] def addressString: String = {
     _addressString match {
       case OptionVal.Some(addr) => addr
-      case OptionVal.None =>
+      case _ =>
         val addr = getDefaultAddress.toString
         _addressString = OptionVal.Some(addr)
         addr
-      case unexpected => throw new RuntimeException(s"Unexpected: $unexpected") // OptionVal exhaustiveness problem
     }
   }
 }

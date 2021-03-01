@@ -434,7 +434,7 @@ object RestartWithBackoffFlow {
           cause match {
             case OptionVal.Some(ex) =>
               cancelStage(ex)
-            case OptionVal.None =>
+            case _ =>
               throw new IllegalStateException("Timer hitting without first getting a cancel cannot happen")
           }
 
