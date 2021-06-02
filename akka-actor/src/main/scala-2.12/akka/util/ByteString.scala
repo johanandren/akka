@@ -804,7 +804,7 @@ sealed abstract class ByteString extends IndexedSeq[Byte] with IndexedSeqOptimiz
    *
    * This method of exposing the bytes of a ByteString can save one array
    * copy and allocation in the happy path scenario and which can lead to better performance,
-   * however it also means that one MUST NOT modify the returned in array, or unexpected
+   * however it also means that one MUST NOT modify the returned array, or unexpected
    * immutable data structure contract-breaking behavior will manifest itself.
    *
    * This API is intended for users who need to pass the byte array to some other API, which will
